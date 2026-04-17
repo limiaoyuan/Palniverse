@@ -2,7 +2,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Persona, AuraObject } from "./types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
+// 2. 初始化（建议加一个判断，防止 Key 缺失时崩溃）
+if (!API_KEY) {
+  console.warn("GEMINI_API_KEY is missing! Check your environment variables.");
+}
+
+// 3. 使用 API_KEY
+const ai = new GoogleGenAI(API_KEY); 
 
 export const generateObjectSoul = async (imageB64: string, description: string): Promise<{persona: Persona, motto: string, facts: string[]}> => {
   const response = await ai.models.generateContent({
