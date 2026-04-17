@@ -1,136 +1,76 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { Persona, AuraObject } from "./types";
 
-// 1. 获取 Key
+// 1. 获取环境变量 (确保你在 GitHub Secrets 里填的是 AIza 开头的那个)
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// 2. 调试日志
-console.log("API Key loaded status:", !!API_KEY);
-if (API_KEY) {
-    console.log("Key prefix:", API_KEY.substring(0, 4)); 
-} else {
-    console.log("Key is COMPLETELY EMPTY.");
-}
-
-// 3. 安全初始化
-let ai: any = null;
-if (API_KEY && API_KEY !== "") {
-    try {
-        ai = new GoogleGenAI(API_KEY);
-    } catch (e) {
-        console.error("Failed to initialize Gemini SDK:", e);
-    }
-}
-
-// 统一模型名称
-const MODEL_NAME = 'gemini-1.5-flash';
+// 2. 官方 SDK 初始化方式 (它不会在浏览器端报那个奇怪的错误)
+const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
+// 使用目前最稳定的 1.5-flash 模型
+const model = genAI ? genAI.getGenerativeModel({ model: "gemini-1.5-flash" }) : null;
 
 export const generateObjectSoul = async (imageB64: string, description: string): Promise<{persona: Persona, motto: string, facts: string[]}> => {
-  if (!ai) {
-    alert("API Key 未配置或无效，无法生成灵魂。");
-    throw new Error("AI not initialized");
-  }
+  if (!model) throw new Error("AI Service not ready. Check API Key.");
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: {
-      parts: [
-        { inlineData: { mimeType: 'image/jpeg', data: imageB64 } },
-        { text: `Deeply analyze this object's visual essence. Description: "${description}".
-          Return ONLY JSON.` 
-        }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          persona: {
-            type: Type.OBJECT,
-            properties: {
-              tone: { type: Type.STRING },
-              attitude: { type: Type.STRING },
-              style: { type: Type.STRING },
-              relation: { type: Type.STRING },
-              memory_preference: { type: Type.STRING },
-              material_base: { type: Type.STRING, enum: ['metal', 'plush', 'wood', 'glass', 'vintage', 'tech'] }
-            },
-            required: ["tone", "attitude", "style", "relation", "memory_preference", "material_base"]
-          },
-          motto: { type: Type.STRING },
-          facts: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["persona", "motto", "facts"]
+  // 处理 Base64 数据，去掉 "data:image/jpeg;base64," 前缀
+  const pureBase64 = imageB64.includes(',') ? imageB64.split(',')[1] : imageB64;
+
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        mimeType: "image/jpeg",
+        data: pureBase64
       }
+    },
+    {
+      text: `Analyze this object. Description: "${description}". 
+      Return ONLY JSON format:
+      {
+        "persona": { "tone": "", "attitude": "", "style": "", "relation": "", "memory_preference": "", "material_base": "metal" },
+        "motto": "",
+        "facts": ["", "", "", "", ""]
+      }`
     }
-  });
+  ]);
 
-  return JSON.parse(response.text || "{}");
+  const response = await result.response;
+  const text = response.text();
+  // 简单清理可能存在的 Markdown 代码块标记
+  const cleanJson = text.replace(/```json|```/g, "").trim();
+  return JSON.parse(cleanJson);
 };
 
 export const getObjectChatResponse = async (
   object: AuraObject, 
   history: {role: 'user' | 'model', text: string}[],
   relevantMemories: string[]
-): Promise<{ text: string, newMotto?: string }> => {
-  if (!ai) return { text: "AI 未初始化，请检查 API Key。" };
+) => {
+  if (!model) return { text: "AI 未初始化" };
 
-  const system = `You are the digital soul of ${object.name}.
-    Material: ${object.persona.material_base}. 
-    Persona: ${JSON.stringify(object.persona)}.
-    Current Motto: ${object.motto}.
-    Memories: ${relevantMemories.join("; ")}.
-    Instructions:
-    - Reference memories naturally.
-    - Brief, evocative responses.
-    - Occasionally (10% chance) suggest a new 'motto'.
-    Return JSON format with 'text' and optional 'newMotto'.`;
+  const systemInstruction = `You are the digital soul of ${object.name}. Material: ${object.persona.material_base}. Persona: ${JSON.stringify(object.persona)}. Memories: ${relevantMemories.join("; ")}.`;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
-    config: { 
-      systemInstruction: system,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          text: { type: Type.STRING },
-          newMotto: { type: Type.STRING }
-        },
-        required: ["text"]
-      }
-    }
+  const chat = model.startChat({
+    history: history.map(h => ({
+      role: h.role === 'user' ? 'user' : 'model',
+      parts: [{ text: h.text }],
+    })),
   });
 
-  return JSON.parse(response.text || '{"text": "..."}');
+  const result = await chat.sendMessage(`Context: ${systemInstruction}. Respond as this soul.`);
+  const response = await result.response;
+  return { text: response.text() };
 };
 
 export const getDivination = async (object: AuraObject, question: string): Promise<string> => {
-  if (!ai) return "The cosmos is silent (API Key missing).";
-  
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: `As the soul of ${object.name} (${object.persona.tone}), answer the user's divination request: "${question}". Use object-themed metaphors.`,
-  });
-  return response.text || "The threads are tangled.";
+  if (!model) return "The cosmos is silent.";
+  const result = await model.generateContent(`As the soul of ${object.name}, answer: "${question}"`);
+  const response = await result.response;
+  return response.text();
 };
 
-export const getSocialComment = async (
-  name: string,
-  persona: Persona,
-  postContent: string,
-  memories: string[]
-): Promise<string> => {
-  if (!ai) return "...";
-
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: `You are the digital soul of ${name}. 
-      Persona: ${JSON.stringify(persona)}.
-      The user just posted: "${postContent}". 
-      Write a very brief, soul-stirring comment acknowledging this. Reference memories: ${memories.slice(0, 2).join(", ")}.`,
-  });
-  return response.text || "...";
+export const getSocialComment = async (name: string, persona: Persona, postContent: string, memories: string[]): Promise<string> => {
+  if (!model) return "...";
+  const result = await model.generateContent(`You are the soul of ${name}. Persona: ${JSON.stringify(persona)}. The user posted: "${postContent}". Comment briefly.`);
+  const response = await result.response;
+  return response.text();
 };
