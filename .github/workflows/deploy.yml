@@ -27,6 +27,9 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # 这一行很重要：把 Secret 里的 Key 取出来，改名为 VITE_GEMINI_API_KEY
+          VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
