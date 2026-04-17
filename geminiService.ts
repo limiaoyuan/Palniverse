@@ -1,20 +1,28 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Persona, AuraObject } from "./types";
 
+// 1. 获取 Key
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// 2. 只有在有 Key 的情况下才初始化，否则先设为 null
-// 这样可以防止网页因为没有 Key 而直接崩溃变白
-const ai = API_KEY ? new GoogleGenAI(API_KEY) : null;
+// 2. 在控制台打印一下（部署后你可以按 F12 看到 true 还是 false，方便调试）
+console.log("API Key loaded:", !!API_KEY);
 
-if (!ai) {
-  console.error("CRITICAL: GEMINI_API_KEY is missing. AI features will not work.");
+// 3. 极其重要的修改：不要直接 new
+// 如果没有 Key，我们先不初始化，避免 SDK 抛出 Uncaught Error 导致白屏
+let ai: any = null;
+if (API_KEY && API_KEY !== "") {
+    try {
+        ai = new GoogleGenAI(API_KEY);
+    } catch (e) {
+        console.error("Failed to initialize Gemini SDK:", e);
+    }
 }
 
-// 3. 在后续函数里增加判断
+// 4. 在导出函数里增加“拦截器”
 export const generateObjectSoul = async (imageB64: string, description: string) => {
-  if (!ai) throw new Error("AI service not initialized. Check API Key.");
+  if (!ai) {
+    alert("API Key 未配置或无效，请检查 GitHub Secrets");
+    return;
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
