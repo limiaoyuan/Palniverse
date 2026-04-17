@@ -1,8 +1,0 @@
-
-{
-  "name": "Aura: Soul Binding Engine",
-  "description": "A digital mapping of physical relationships, transforming everyday objects into sentient companions with deep memory and personality.",
-  "requestFramePermissions": [
-    "camera"
-  ]
-}
