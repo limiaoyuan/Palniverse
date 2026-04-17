@@ -4,11 +4,10 @@ import { Persona, AuraObject } from "./types";
 // 1. 获取 Key
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// 2. 在控制台打印一下（部署后你可以按 F12 看到 true 还是 false，方便调试）
+// 2. 调试日志
 console.log("API Key loaded:", !!API_KEY);
 
-// 3. 极其重要的修改：不要直接 new
-// 如果没有 Key，我们先不初始化，避免 SDK 抛出 Uncaught Error 导致白屏
+// 3. 安全初始化
 let ai: any = null;
 if (API_KEY && API_KEY !== "") {
     try {
@@ -18,21 +17,21 @@ if (API_KEY && API_KEY !== "") {
     }
 }
 
-// 4. 在导出函数里增加“拦截器”
-export const generateObjectSoul = async (imageB64: string, description: string) => {
+// 统一模型名称
+const MODEL_NAME = 'gemini-1.5-flash';
+
+export const generateObjectSoul = async (imageB64: string, description: string): Promise<{persona: Persona, motto: string, facts: string[]}> => {
   if (!ai) {
-    alert("API Key 未配置或无效，请检查 GitHub Secrets");
-    return;
-  
+    alert("API Key 未配置或无效，无法生成灵魂。");
+    throw new Error("AI not initialized");
+  }
+
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: MODEL_NAME,
     contents: {
       parts: [
         { inlineData: { mimeType: 'image/jpeg', data: imageB64 } },
         { text: `Deeply analyze this object's visual essence. Description: "${description}".
-          1. Persona: Material base (metal/plush/wood/glass/vintage/tech), Tone, Attitude, Style, Relation, Memory_preference.
-          2. Motto: A soul-stirring one-sentence quote about its existence.
-          3. Facts: 5 interesting labels/tags about its soul or history.
           Return ONLY JSON.` 
         }
       ]
@@ -70,6 +69,8 @@ export const getObjectChatResponse = async (
   history: {role: 'user' | 'model', text: string}[],
   relevantMemories: string[]
 ): Promise<{ text: string, newMotto?: string }> => {
+  if (!ai) return { text: "AI 未初始化，请检查 API Key。" };
+
   const system = `You are the digital soul of ${object.name}.
     Material: ${object.persona.material_base}. 
     Persona: ${JSON.stringify(object.persona)}.
@@ -78,11 +79,11 @@ export const getObjectChatResponse = async (
     Instructions:
     - Reference memories naturally.
     - Brief, evocative responses.
-    - Occasionally (10% chance) suggest a new 'motto' that reflects your evolving bond.
+    - Occasionally (10% chance) suggest a new 'motto'.
     Return JSON format with 'text' and optional 'newMotto'.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: MODEL_NAME,
     contents: history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
     config: { 
       systemInstruction: system,
@@ -102,8 +103,10 @@ export const getObjectChatResponse = async (
 };
 
 export const getDivination = async (object: AuraObject, question: string): Promise<string> => {
+  if (!ai) return "The cosmos is silent (API Key missing).";
+  
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: MODEL_NAME,
     contents: `As the soul of ${object.name} (${object.persona.tone}), answer the user's divination request: "${question}". Use object-themed metaphors.`,
   });
   return response.text || "The threads are tangled.";
@@ -115,8 +118,10 @@ export const getSocialComment = async (
   postContent: string,
   memories: string[]
 ): Promise<string> => {
+  if (!ai) return "...";
+
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: MODEL_NAME,
     contents: `You are the digital soul of ${name}. 
       Persona: ${JSON.stringify(persona)}.
       The user just posted: "${postContent}". 
