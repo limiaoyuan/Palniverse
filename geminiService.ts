@@ -5,7 +5,12 @@ import { Persona, AuraObject } from "./types";
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 // 2. 调试日志
-console.log("API Key loaded:", !!API_KEY);
+console.log("API Key loaded status:", !!API_KEY);
+if (API_KEY) {
+    console.log("Key prefix:", API_KEY.substring(0, 4)); 
+} else {
+    console.log("Key is COMPLETELY EMPTY.");
+}
 
 // 3. 安全初始化
 let ai: any = null;
