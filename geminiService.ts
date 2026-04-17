@@ -4,15 +4,18 @@ import { Persona, AuraObject } from "./types";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// 2. 初始化（建议加一个判断，防止 Key 缺失时崩溃）
-if (!API_KEY) {
-  console.warn("GEMINI_API_KEY is missing! Check your environment variables.");
+// 2. 只有在有 Key 的情况下才初始化，否则先设为 null
+// 这样可以防止网页因为没有 Key 而直接崩溃变白
+const ai = API_KEY ? new GoogleGenAI(API_KEY) : null;
+
+if (!ai) {
+  console.error("CRITICAL: GEMINI_API_KEY is missing. AI features will not work.");
 }
 
-// 3. 使用 API_KEY
-const ai = new GoogleGenAI(API_KEY); 
-
-export const generateObjectSoul = async (imageB64: string, description: string): Promise<{persona: Persona, motto: string, facts: string[]}> => {
+// 3. 在后续函数里增加判断
+export const generateObjectSoul = async (imageB64: string, description: string) => {
+  if (!ai) throw new Error("AI service not initialized. Check API Key.");
+  
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
