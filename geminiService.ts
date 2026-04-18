@@ -7,7 +7,7 @@ const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 // 2. 官方 SDK 初始化方式 (它不会在浏览器端报那个奇怪的错误)
 const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
 // 使用目前最稳定的 1.5-flash 模型
-const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.0-flash" },{ 
+const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.0-flash-live" },{ 
     apiVersion: "v1beta"      // 2. 如果是 2.0 模型，强烈建议加上这一行
   }) : null;
 
